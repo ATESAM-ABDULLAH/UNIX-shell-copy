@@ -9,9 +9,9 @@
 // Function to parse and run bash commands
 int execute(char *buffer)
 {
-    char *path = "/usr/bin/bash"; // path to bash
-    char *args[50];               // args in command
-    char *token;                  // one word
+    char *path = "/usr/bin"; // path to bash
+    char *args[50];          // args in command
+    char *token;             // one word
     int i = 0;
 
     // Parse the command into arguments
@@ -28,14 +28,14 @@ int execute(char *buffer)
     // create child process
     pid_t pid = fork();
 
-    if (pid == -1)
+    if (pid == -1) // fail
     {
         printf("Fork Failed");
         return 1;
     }
-    else if (pid == 0)
+    else if (pid == 0) // child
     {
-        execv(path, args);
+        execv(path, args); // add command into path e.g: ls ---> /usr/bin/ls
         perror("execv");
     }
 }
