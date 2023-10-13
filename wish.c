@@ -6,6 +6,23 @@
 #include <sys/types.h>
 #include <sys/wait.h> // waitpid
 
+// Function to trim whitespaces from string
+char *strtrim(char *str)
+{                         // left trim
+    while (isspace(*str)) // while head/ptr = whitespace
+        str++;
+
+    char *end = &str[strlen(str) - 1]; // last char in string
+
+    // right trim
+    while (isspace(*end)) // while end/ptr = whitespace
+    {
+        end--;             // move back inwards
+        *(end + 1) = '\0'; // add endline to whitespace
+    }
+    return str;
+}
+
 // Function to parse and run bash commands
 int execute(char *buffer)
 {
@@ -17,8 +34,10 @@ int execute(char *buffer)
     // Parse the command into arguments
     while ((token = strsep(&buffer, " ")) != NULL)
     {
+        token = strtrim(token);
         if (strlen(token) > 0) // if token not null
         {
+            printf("-%s-", token);
             args[i++] = token;
         }
         // printf("%s\n",token);
@@ -38,6 +57,7 @@ int execute(char *buffer)
         execv(path, args); // add command into path e.g: ls ---> /usr/bin/ls
         perror("execv");
     }
+    return 0;
 }
 
 int main(int argc, char *argv[])
@@ -62,7 +82,7 @@ int main(int argc, char *argv[])
             if (buffer[line - 1] == '\n') // Remove the trailing newline character
                 buffer[line - 1] = '\0';
 
-            printf("%s\n", buffer);
+            // printf("%s\n", buffer);
         }
 
         fclose(file);
@@ -93,7 +113,7 @@ int main(int argc, char *argv[])
             free(buffer);
             exit(0); // EOF
         }
-        printf("%s\n", buffer);
+        // printf("%s\n", buffer);
         execute(buffer);
     }
     return 0;
