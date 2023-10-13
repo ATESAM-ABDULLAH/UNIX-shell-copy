@@ -6,24 +6,7 @@
 #include <sys/types.h>
 #include <sys/wait.h> // waitpid
 
-// Function to trim whitespaces from string
-char *strtrim(char *str)
-{                         // left trim
-    while (isspace(*str)) // while head/ptr = whitespace
-        str++;
-
-    char *end = &str[strlen(str) - 1]; // last char in string
-
-    // right trim
-    while (isspace(*end)) // while end/ptr = whitespace
-    {
-        end--;             // move back inwards
-        *(end + 1) = '\0'; // add endline to whitespace
-    }
-    return str;
-}
-
-// Function to parse and run bash commands
+// Function to parse and run UNIX commands
 int execute(char *buffer)
 {
     char *path = "/usr/bin"; // path to bash
@@ -31,16 +14,14 @@ int execute(char *buffer)
     char *token;             // one word
     int i = 0;
 
-    // Parse the command into arguments
-    while ((token = strsep(&buffer, " ")) != NULL)
+    // split the command on whitespace
+    while ((token = strsep(&buffer, " \t\n\v\f\r")) != NULL)
     {
-        token = strtrim(token);
         if (strlen(token) > 0) // if token not null
         {
             printf("-%s-", token);
             args[i++] = token;
         }
-        // printf("%s\n",token);
     }
     args[i] = NULL; // Null-terminate the argument array
 
