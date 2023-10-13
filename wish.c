@@ -9,9 +9,9 @@
 // Function to parse and run UNIX commands
 int execute(char *buffer)
 {
-    char *path = "/usr/bin"; // path to bash
-    char *args[50];          // args in command
-    char *token;             // one word
+    char *path = "/bin/"; // path to bash
+    char *args[50];       // args in command
+    char *token;          // one word
     int i = 0;
 
     // split the command on whitespace
@@ -19,11 +19,15 @@ int execute(char *buffer)
     {
         if (strlen(token) > 0) // if token not null
         {
-            printf("-%s-", token);
+            // printf("(%s), len:%zu\n", token, strlen(token));
+
             args[i++] = token;
         }
     }
     args[i] = NULL; // Null-terminate the argument array
+
+    printf("%s,%zu,%s,%zu", path, strlen(path), args[0], strlen(args[0]));
+    // strcat(path, args[0]); // causes seg fault
 
     // create child process
     pid_t pid = fork();
