@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
             exit(0); // EOF
         }
         // printf("%s\n", buffer);
-        execute(buffer);
+        // execute(buffer);
     }
     return 0;
 }
