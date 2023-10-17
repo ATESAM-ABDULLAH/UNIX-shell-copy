@@ -1,4 +1,4 @@
-#include "wish.h"
+#include "wish.h"   // printError, parseInput, searchPath, redirect, executeCommands, trim, clean
 #include <ctype.h>  // isspace
 #include <regex.h>  // regcomp, regexec, regfree
 #include <stdio.h>  // fopen, fclose, fileno, getline, feof
@@ -20,7 +20,6 @@ int execute(char *buffer)
         if (strlen(token) > 0) // if token not null
         {
             // printf("(%s), len:%zu\n", token, strlen(token));
-
             args[i++] = token;
         }
     }
