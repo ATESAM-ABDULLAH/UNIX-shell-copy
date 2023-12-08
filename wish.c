@@ -8,43 +8,34 @@
 #define MAX_ARGS 64
 #define MAX_PATHS 64
 
-char* paths[MAX_PATHS]; // Array to store paths
+char* paths[MAX_PATHS]={0}; // Array to store paths
 int numPaths = 0; // Number of paths in the array
 
 // Function to print error message
 void printError() {
-    char error_message[30] = "An error has occurred\n";
-    write(STDERR_FILENO, error_message, strlen(error_message)); 
+    fprintf(stderr,"An error has occurred\n");
 }
 
 // Function to execute command or shell script
 void executeCommand(char **args, int background) {
     int i;
     pid_t pid;
-    int found_executable = 0;
+    int found = 0;
     char cmd[MAX_INPUT_SIZE];
 
     // Try to find the shell script in each path in the paths array
     for (i = 0; i < numPaths; i++) {
-        snprintf(cmd, sizeof(cmd), "%s/%s.sh", paths[i], args[0]);
+        // printf("path = %s\n",paths[i]);
+        snprintf(cmd, sizeof(cmd), "%s/%s", paths[i], args[0]);
+        printf("cmd = %s\n",cmd);
+
         if (access(cmd, X_OK) == 0) {
-            found_executable = 1;
+            found = 1;
             break;
         }
     }
 
-    if (!found_executable) {
-        // If .sh file not found, try to find executable command
-        for (i = 0; i < numPaths; i++) {
-            snprintf(cmd, sizeof(cmd), "%s/%s", paths[i], args[0]);
-            if (access(cmd, X_OK) == 0) {
-                found_executable = 1;
-                break;
-            }
-        }
-    }
-
-    if (!found_executable) {
+    if (!found) {
         printError();
         return;
     }
@@ -86,11 +77,12 @@ int handleBuiltInCommands(char **args) {
         return 1;
     } else if (strcmp(args[0], "path") == 0) {
         // Clear existing paths
-        // numPaths = 0;
-
+        numPaths = 0;
         // Skip the "path" command itself and update paths with provided directories
-        for (int i = 1; args[i] != NULL; i++) {
-            paths[numPaths++] = args[i];
+        if (args[1] != NULL) {
+            for (int i = 1; args[i] != NULL; i++) {
+                paths[numPaths++] = args[i];
+            }
         }
         // printf("paths %d\n",numPaths);
 
@@ -147,7 +139,6 @@ int main(int argc, char *argv[]) {
     while (1) {
         if (file == NULL) {
             printf("wish> ");
-            fflush(stdout);
             if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL) {
                 break;
             } 
@@ -157,7 +148,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        input[strcspn(input, "\n")] = '\0'; // Remove newline
+        input[strcspn(input, "\n")] = '\0'; // Replace newline with NULL
 
         parseInput(input);
     }
