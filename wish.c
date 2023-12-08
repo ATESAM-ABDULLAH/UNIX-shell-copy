@@ -27,7 +27,7 @@ void executeCommand(char **args, int background) {
     for (i = 0; i < numPaths; i++) {
         // printf("path = %s\n",paths[i]);
         snprintf(cmd, sizeof(cmd), "%s/%s", paths[i], args[0]);
-        printf("cmd = %s\n",cmd);
+        // printf("cmd = %s\n",cmd);
 
         if (access(cmd, X_OK) == 0) {
             found = 1;
@@ -43,13 +43,11 @@ void executeCommand(char **args, int background) {
     pid = fork();
     if (pid < 0) {
         printError();
-        exit(EXIT_FAILURE);
     } else if (pid == 0) {
         // Child process
         execv(cmd, args);
         // If execv returns, it must have failed
         printError();
-        exit(EXIT_FAILURE);
     } else {
         // Parent process
         if (!background) {
@@ -65,7 +63,7 @@ int handleBuiltInCommands(char **args) {
         if (args[1] != NULL) {
             printError();
         }
-        exit(EXIT_SUCCESS);
+        exit(0);
     } else if (strcmp(args[0], "cd") == 0) {
         if (args[1] == NULL) {
             printError();
@@ -129,7 +127,6 @@ int main(int argc, char *argv[]) {
         file = fopen(argv[1], "r");
         if (file == NULL) {
             printError();
-            exit(EXIT_FAILURE);
         }
     }
 
