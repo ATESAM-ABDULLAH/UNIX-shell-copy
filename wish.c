@@ -86,7 +86,8 @@ int handleBuiltInCommands(char **args) {
         return 1;
     } else if (strcmp(args[0], "path") == 0) {
         // Clear existing paths
-        numPaths = 0;
+        // numPaths = 0;
+
         // Skip the "path" command itself and update paths with provided directories
         for (int i = 1; args[i] != NULL; i++) {
             paths[numPaths++] = args[i];
@@ -128,7 +129,6 @@ void parseInput(char *input) {
 }
 
 int main(int argc, char *argv[]) {
-
     char input[MAX_INPUT_SIZE];
     FILE *file = NULL;
 
