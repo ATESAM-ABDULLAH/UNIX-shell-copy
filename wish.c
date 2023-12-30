@@ -1,158 +1,215 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/wait.h>
+#include "wish.h"
+#include <ctype.h>  // isspace
+#include <regex.h>  // regcomp, regexec, regfree
+#include <stdio.h>  // fopen, fclose, fileno, getline, feof
+#include <stdlib.h> // exit
+#include <sys/types.h>
+#include <sys/wait.h> // waitpid
 
-#define MAX_INPUT_SIZE 1024
-#define MAX_ARGS 64
-#define MAX_PATHS 64
+FILE *in = NULL;
+char *paths[BUFF_SIZE] = {"/bin", NULL};
+char *line = NULL;
 
-char* paths[MAX_PATHS]={0}; // Array to store paths
-int numPaths = 0; // Number of paths in the array
-
-// Function to print error message
-void printError() {
-    fprintf(stderr,"An error has occurred\n");
+void clean(void) {
+  free(line);
+  fclose(in);
 }
 
-// Function to execute command or shell script
-void executeCommand(char **args, int background) {
-    int i;
-    pid_t pid;
-    int found = 0;
-    char cmd[MAX_INPUT_SIZE];
+char *trim(char *s) {
+  // trim leading spaces
+  while (isspace(*s))
+    s++;
 
-    // Try to find the shell script in each path in the paths array
-    for (i = 0; i < numPaths; i++) {
-        // printf("path = %s\n",paths[i]);
-        snprintf(cmd, sizeof(cmd), "%s/%s", paths[i], args[0]);
-        // printf("cmd = %s\n",cmd);
+  if (*s == '\0')
+    return s; // empty string
 
-        if (access(cmd, X_OK) == 0) {
-            found = 1;
-            break;
-        }
-    }
+  // trim trailing spaces
+  char *end = s + strlen(s) - 1;
+  while (end > s && isspace(*end))
+    end--;
 
-    if (!found) {
-        printError();
-        return;
-    }
-
-    pid = fork();
-    if (pid < 0) {
-        printError();
-    } else if (pid == 0) {
-        // Child process
-        execv(cmd, args);
-        // If execv returns, it must have failed
-        printError();
-    } else {
-        // Parent process
-        if (!background) {
-            int status;
-            waitpid(pid, &status, 0);
-        }
-    }
+  end[1] = '\0';
+  return s;
 }
 
-// Function to handle built-in commands
-int handleBuiltInCommands(char **args) {
-    if (strcmp(args[0], "exit") == 0) {
-        if (args[1] != NULL) {
-            printError();
-        }
-        exit(0);
-    } else if (strcmp(args[0], "cd") == 0) {
-        if (args[1] == NULL) {
-            printError();
-        } else {
-            if (chdir(args[1]) != 0) {
-                printError();
-            }
-        }
-        return 1;
-    } else if (strcmp(args[0], "path") == 0) {
-        // Clear existing paths
-        numPaths = 0;
-        // Skip the "path" command itself and update paths with provided directories
-        if (args[1] != NULL) {
-            for (int i = 1; args[i] != NULL; i++) {
-                paths[numPaths++] = args[i];
-            }
-        }
-        // printf("paths %d\n",numPaths);
+void *parseInput(void *arg) {
+  char *args[BUFF_SIZE];
+  int args_num = 0;
+  FILE *output = stdout;
+  struct function_args *fun_args = (struct function_args *)arg;
+  char *commandLine = fun_args->command;
 
-        return 1;
+  char *command = strsep(&commandLine, ">");
+  if (command == NULL || *command == '\0') {
+    printError();
+    return NULL;
+  }
+
+  command = trim(command);
+
+  if (commandLine != NULL) {
+    // contain white space in the middle or ">"
+    regex_t reg;
+    if (regcomp(&reg, "\\S\\s+\\S", REG_CFLAGS) != 0) {
+      printError();
+      regfree(&reg);
+      return NULL;
     }
-    return 0;
+    if (regexec(&reg, commandLine, 0, NULL, 0) == 0 ||
+        strstr(commandLine, ">") != NULL) {
+      printError();
+      regfree(&reg);
+      return NULL;
+    }
+
+    regfree(&reg);
+
+    if ((output = fopen(trim(commandLine), "w")) == NULL) {
+      printError();
+      return NULL;
+    }
+  }
+
+  char **ap = args;
+  while ((*ap = strsep(&command, " \t")) != NULL)
+    if (**ap != '\0') {
+      *ap = trim(*ap);
+      ap++;
+      if (++args_num >= BUFF_SIZE)
+        break;
+    }
+
+  if (args_num > 0)
+    executeCommands(args, args_num, output);
+
+  return NULL;
 }
 
-// Function to parse input command
-void parseInput(char *input) {
-    char *token;
-    char *args[MAX_ARGS];
-    int background = 0;
+int searchPath(char path[], char *firstArg) {
+  // search executable file in path
+  int i = 0;
+  while (paths[i] != NULL) {
+    snprintf(path, BUFF_SIZE, "%s/%s", paths[i], firstArg);
+    if (access(path, X_OK) == 0)
+      return 0;
+    i++;
+  }
+  return -1;
+}
 
-    token = strtok(input, " \t\n");
-    int i = 0;
-    while (token != NULL) {
-        if (strcmp(token, "&") == 0) {
-            background = 1;
-            break;
-        }
-        args[i++] = token;
-        // printf("arg[%d] = %s\n",i-1,args[i-1]);
-        token = strtok(NULL, " \t\n");
-    }
-    args[i] = NULL;
+void redirect(FILE *out) {
+  int outFileno;
+  if ((outFileno = fileno(out)) == -1) {
+    printError();
+    return;
+  }
 
-    if (args[0] == NULL) {
-        return;
+  if (outFileno != STDOUT_FILENO) {
+    // redirect output
+    if (dup2(outFileno, STDOUT_FILENO) == -1) {
+      printError();
+      return;
     }
+    if (dup2(outFileno, STDERR_FILENO) == -1) {
+      printError();
+      return;
+    }
+    fclose(out);
+  }
+}
 
-    if (!handleBuiltInCommands(args)) {
-        // Not a built-in command
-        executeCommand(args, background);
+void executeCommands(char *args[], int args_num, FILE *out) {
+  // check built-in commands first
+  if (strcmp(args[0], "exit") == 0) {
+    if (args_num > 1)
+      printError();
+    else {
+      atexit(clean);
+      exit(EXIT_SUCCESS);
     }
+  } else if (strcmp(args[0], "cd") == 0) {
+    if (args_num == 1 || args_num > 2)
+      printError();
+    else if (chdir(args[1]) == -1)
+      printError();
+  } else if (strcmp(args[0], "path") == 0) {
+    size_t i = 0;
+    paths[0] = NULL;
+    for (; i < args_num - 1; i++)
+      paths[i] = strdup(args[i + 1]);
+
+    paths[i + 1] = NULL;
+  } else {
+    // not built-in commands
+    char path[BUFF_SIZE];
+    if (searchPath(path, args[0]) == 0) {
+      pid_t pid = fork();
+      if (pid == -1)
+        printError();
+      else if (pid == 0) {
+        // child process
+        redirect(out);
+
+        if (execv(path, args) == -1)
+          printError();
+      } else
+        waitpid(pid, NULL, 0); // parent process waits child
+    } else
+      printError(); // not fond in path
+  }
 }
 
 int main(int argc, char *argv[]) {
-    char input[MAX_INPUT_SIZE];
-    FILE *file = NULL;
+  int mode = INTERACTIVE_MODE;
+  in = stdin;
+  size_t linecap = 0;
+  ssize_t nread;
 
-    // Check if batch mode
-    if (argc > 1) {
-        file = fopen(argv[1], "r");
-        if (file == NULL) {
-            printError();
+  if (argc > 1) {
+    mode = BATCH_MODE;
+    if (argc > 2 || (in = fopen(argv[1], "r")) == NULL) {
+      printError();
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  while (1) {
+    if (mode == INTERACTIVE_MODE)
+      printf("wish> ");
+
+    if ((nread = getline(&line, &linecap, in)) > 0) {
+      char *command;
+      int commands_num = 0;
+      struct function_args args[BUFF_SIZE];
+
+      // remove newline character
+      if (line[nread - 1] == '\n')
+        line[nread - 1] = '\0';
+
+      char *temp = line;
+
+      while ((command = strsep(&temp, "&")) != NULL)
+        if (command[0] != '\0') {
+          args[commands_num++].command = strdup(command);
+          if (commands_num >= BUFF_SIZE)
+            break;
         }
+
+      for (size_t i = 0; i < commands_num; i++)
+        if (pthread_create(&args[i].thread, NULL, &parseInput, &args[i]) != 0)
+          printError();
+
+      for (size_t i = 0; i < commands_num; i++) {
+        if (pthread_join(args[i].thread, NULL) != 0)
+          printError();
+        if (args[i].command != NULL)
+          free(args[i].command);
+      }
+    } else if (feof(in) != 0) {
+      atexit(clean);
+      exit(EXIT_SUCCESS); // EOF
     }
+  }
 
-    numPaths++;
-    paths[0] = "/bin"; // Initial directory
-
-    while (1) {
-        if (file == NULL) {
-            printf("wish> ");
-            if (fgets(input, MAX_INPUT_SIZE, stdin) == NULL) {
-                break;
-            } 
-        } else {
-            if (fgets(input, MAX_INPUT_SIZE, file) == NULL) {
-                break;
-            }
-        }
-
-        input[strcspn(input, "\n")] = '\0'; // Replace newline with NULL
-
-        parseInput(input);
-    }
-
-    if (file != NULL) {
-        fclose(file);
-    }
-
-    return 0;
+  return 0;
 }
